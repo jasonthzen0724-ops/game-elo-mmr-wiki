@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>現代遊戲 Elo 與隱分 MMR 機制 — LLM Wiki 知識庫</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --sidebar-bg: #1e293b;
+    --card-bg: #1e293b;
+    --text-main: #f1f5f9;
+    --text-muted: #94a3b8;
+    --accent: #38bdf8;
+    --accent-hover: #7dd3fc;
+    --border: #334155;
+    --table-header: #0284c7;
+    --table-stripe: #172033;
+    --code-bg: #0b1120;
+  }
+  * {
+    box-sizing: border-box;
+    scroll-behavior: smooth;
+  }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+    background-color: var(--bg);
+    color: var(--text-main);
+    line-height: 1.7;
+    display: flex;
+    min-height: 100vh;
+  }
+  /* Sidebar Navigation */
+  aside {
+    width: 280px;
+    background-color: var(--sidebar-bg);
+    border-right: 1px solid var(--border);
+    padding: 24px 20px;
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    overflow-y: auto;
+  }
+  .wiki-badge {
+    display: inline-block;
+    background: rgba(56, 189, 248, 0.15);
+    color: var(--accent);
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 999px;
+    margin-bottom: 10px;
+    letter-spacing: 0.5px;
+  }
+  aside h1 {
+    font-size: 1.25rem;
+    margin: 0 0 12px 0;
+    line-height: 1.4;
+    color: #ffffff;
+  }
+  aside p.desc {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 24px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 16px;
+  }
+  nav ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  nav li {
+    margin-bottom: 8px;
+  }
+  nav a {
+    display: block;
+    color: var(--text-muted);
+    text-decoration: none;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 0.92rem;
+    transition: all 0.2s;
+  }
+  nav a:hover {
+    background-color: rgba(56, 189, 248, 0.12);
+    color: var(--accent-hover);
+  }
+  /* Main Content */
+  main {
+    margin-left: 280px;
+    flex: 1;
+    padding: 40px 48px;
+    max-width: 1050px;
+  }
+  header.hero {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    border: 1px solid var(--border);
+    border-left: 5px solid var(--accent);
+    border-radius: 12px;
+    padding: 28px 32px;
+    margin-bottom: 36px;
+  }
+  header.hero h2 {
+    margin: 0 0 10px 0;
+    font-size: 1.85rem;
+    color: #ffffff;
+  }
+  header.hero p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 1rem;
+  }
+  section.wiki-card {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px 32px;
+    margin-bottom: 32px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+  }
+  section.wiki-card h2 {
+    margin-top: 0;
+    font-size: 1.45rem;
+    color: var(--accent);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 10px;
+    margin-bottom: 18px;
+  }
+  section.wiki-card h3 {
+    color: #e2e8f0;
+    font-size: 1.15rem;
+    margin-top: 24px;
+    margin-bottom: 12px;
+  }
+  ul, ol {
+    padding-left: 22px;
+  }
+  li {
+    margin-bottom: 10px;
+  }
+  strong {
+    color: #ffffff;
+  }
+  /* Table Styling */
+  .table-wrap {
+    overflow-x: auto;
+    margin: 18px 0;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.94rem;
+  }
+  th {
+    background-color: var(--table-header);
+    color: #ffffff;
+    text-align: left;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+  }
+  td {
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    vertical-align: top;
+  }
+  tr:nth-child(even) td {
+    background-color: var(--table-stripe);
+  }
+  /* Formula / Code Box */
+  pre.formula-box {
+    background-color: var(--code-bg);
+    border: 1px solid var(--border);
+    border-left: 4px solid #38bdf8;
+    border-radius: 8px;
+    padding: 16px 20px;
+    font-family: "Fira Code", Consolas, Monaco, monospace;
+    font-size: 0.95rem;
+    color: #7dd3fc;
+    overflow-x: auto;
+    margin: 16px 0;
+  }
+  /* Interactive Mini Elo Calculator */
+  .calc-box {
+    background-color: #0f172a;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    margin-top: 20px;
+  }
+  .calc-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+    margin-bottom: 14px;
+  }
+  .calc-grid label {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+  }
+  .calc-grid input, .calc-grid select {
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background-color: #1e293b;
+    color: #ffffff;
+    font-size: 0.95rem;
+  }
+  .calc-result {
+    background: rgba(56, 189, 248, 0.1);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    color: #e0f2fe;
+  }
+  footer {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    margin-top: 40px;
+    padding-bottom: 20px;
+  }
+  @media (max-width: 820px) {
+    body { flex-direction: column; }
+    aside { position: static; width: 100%; border-right: none; border-bottom: 1px solid var(--border); }
+    main { margin-left: 0; padding: 24px 18px; }
+  }
+</style>
+</head>
+<body>
+
+<aside>
+  <span class="wiki-badge">LLM WIKI KNOWLEDGE BASE</span>
+  <h1>現代遊戲 Elo 與隱分 MMR 機制</h1>
+  <p class="desc">整合 10 篇配對演算法與遊戲開發者日誌之結構化知識庫，可直接作為 GitHub Pages 靜態網頁瀏覽。</p>
+  <nav>
+    <ul>
+      <li><a href="#page1">📖 Page 1：核心概念與名詞字典</a></li>
+      <li><a href="#page2">📈 Page 2：配對演算法的演進史</a></li>
+      <li><a href="#page3">🎭 Page 3：表面牌位與隱分雙軌制</a></li>
+      <li><a href="#page4">🛡️ Page 4：炸魚偵測與 SBMM / EOMM</a></li>
+      <li><a href="#page5">📚 Page 5：參考來源（10 篇文獻）</a></li>
+    </ul>
+  </nav>
+</aside>
+
+<main>
+  <header class="hero">
+    <h2>現代遊戲 Elo 與隱分 MMR 機制 — LLM Wiki 知識庫</h2>
+    <p>從 1960 年代西洋棋的經典 Elo 公式出發，深入解析 Glicko-2、微軟 TrueSkill 2、Riot Games 與 Valve 的雙軌制牌位設計，以及現代商業遊戲面臨的炸魚偵測與 EOMM（參與度優化配對）爭議。</p>
+  </header>
+
+  <section id="page1" class="wiki-card">
+    <h2>Page 1：核心概念與名詞字典</h2>
+    <p>在理解現代多人競技遊戲的積分運作前，必須先釐清系統背後的五個核心術語：</p>
+    <ul>
+      <li><strong>配對系統（Matchmaking）：</strong>遊戲伺服器根據玩家實力、網路延遲（Ping）與排隊時間，將多位玩家分配至同一場對局的自動化演算法。</li>
+      <li><strong>隱藏積分（MMR, Matchmaking Rating）：</strong>系統在後台用來評估玩家「真實實力」的隱藏數值，直接決定你會遇到什麼程度的對手與隊友。</li>
+      <li><strong>表面牌位（Visible Rank / LP / RR）：</strong>顯示在玩家個人資料上的段位標籤（如白金、鑽石、大師），主要提供視覺成就感與賽季進度目標。</li>
+      <li><strong>評分偏差 / 不確定度（RD / &sigma;）：</strong>系統對你目前 MMR 準確度的信心程度。新帳號或久未遊玩的玩家不確定度高，每場勝負的積分變動幅度會特別劇烈。</li>
+      <li><strong>炸魚（Smurfing）：</strong>高段位玩家刻意註冊新帳號（開小號）進入低段位對局虐菜的行為。</li>
+    </ul>
+  </section>
+
+  <section id="page2" class="wiki-card">
+    <h2>Page 2：配對演算法的演進史（Elo &rarr; Glicko-2 &rarr; TrueSkill 2）</h2>
+    <p>現代遊戲配對並非單一公式，而是歷經三代數學模型的演進，逐步解決多人團隊競技的複雜度問題：</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>演算法世代</th>
+            <th>提出者 / 年份</th>
+            <th>核心數學邏輯</th>
+            <th>解決的痛點</th>
+            <th>代表應用遊戲</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>1. Elo 系統</strong></td>
+            <td>Arpad Elo (1960)</td>
+            <td>1v1 零和賽局，透過雙方分差計算期望勝率 E<sub>A</sub>，再乘上權重 K 更新分數。</td>
+            <td>建立了量化玩家相對實力的基礎標準。</td>
+            <td>國際象棋、早期《英雄聯盟》S1～S2</td>
+          </tr>
+          <tr>
+            <td><strong>2. Glicko / Glicko-2</strong></td>
+            <td>Mark Glickman (1995 / 2001)</td>
+            <td>在積分之外新增 <strong>評分偏差（RD）</strong> 與 <strong>波動率（&sigma;）</strong> 兩個參數。</td>
+            <td>解決「新手定位太慢」以及「老手半年沒玩實力退化卻還停在高分」的問題。</td>
+            <td>《CS:GO》、《Dota 2》（2023 升級版）、Lichess</td>
+          </tr>
+          <tr>
+            <td><strong>3. TrueSkill / TrueSkill 2</strong></td>
+            <td>微軟研究院 (2006 / 2018)</td>
+            <td>採用貝氏推論將實力視為常態分佈 N(&mu;, &sigma;&sup2;)；2 代更納入<strong>個人局內表現（KDA/數據）</strong>與跨模式表現。</td>
+            <td>解決 <strong>5v5 多人團隊競技</strong> 中「單人實力拆解」與「凱瑞全場卻輸掉仍被扣分」的不公平感。</td>
+            <td>《最後一戰 Halo》、《戰爭機器 4》、《Apex 英雄》類似架構</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>關鍵公式與數學直覺（Elo 基礎）</h3>
+    <pre class="formula-box">期望勝率公式：E_A = 1 / (1 + 10^((R_B - R_A) / 400))
+賽後積分更新：R'_A = R_A + K * (S_A - E_A)</pre>
+    <ul>
+      <li><strong>400 分差距法則：</strong>當雙方積分相差 400 分時，高分方的預期勝率約為 <strong>91%</strong>，低分方僅約 9%。</li>
+      <li><strong>爆冷門機制：</strong>賽後更新取決於「實際得分 S<sub>A</sub>（勝=1、平=0.5、負=0）」與「期望勝率 E<sub>A</sub>」的差值。低分玩家擊敗高分強敵時，(S<sub>A</sub> - E<sub>A</sub>) 接近 +0.91，會獲得極大幅度的加分。</li>
+      <li><strong>K 值動態權重：</strong>新手期的 K 值通常設定較高，讓分數能快速收斂至真實區間；老手期的 K 值較低，避免單場失誤造成排位劇烈震盪。</li>
+    </ul>
+
+    <div class="calc-box">
+      <strong>🧮 互動驗證：Elo 期望勝率與賽後加減分試算</strong>
+      <div class="calc-grid" style="margin-top: 12px;">
+        <div>
+          <label for="ra">玩家 A 積分 (R_A)</label>
+          <input type="number" id="ra" value="1500" oninput="calcElo()">
+        </div>
+        <div>
+          <label for="rb">對手 B 積分 (R_B)</label>
+          <input type="number" id="rb" value="1700" oninput="calcElo()">
+        </div>
+        <div>
+          <label for="kval">權重常數 (K 值)</label>
+          <input type="number" id="kval" value="32" oninput="calcElo()">
+        </div>
+        <div>
+          <label for="outcome">對戰結果 (S_A)</label>
+          <select id="outcome" onchange="calcElo()">
+            <option value="1">玩家 A 獲勝 (1)</option>
+            <option value="0.5">平手 (0.5)</option>
+            <option value="0">玩家 A 落敗 (0)</option>
+          </select>
+        </div>
+      </div>
+      <div class="calc-result" id="elo-output"></div>
+    </div>
+  </section>
+
+  <section id="page3" class="wiki-card">
+    <h2>Page 3：面子與裡子：表面牌位（Rank）與隱分（MMR）的雙軌制</h2>
+    <p>以 Riot Games 旗下的《英雄聯盟（LoL）》與《特戰英豪（Valorant）》為代表，現代競技遊戲普遍將「表面牌位」與「MMR」分開計算：</p>
+    <ol>
+      <li><strong>為什麼要分開？（心理學與體驗設計）：</strong>MMR 變動極快且缺乏階段感；表面牌位（如聯盟分數 LP、競技評分 RR）搭配「晉級感」與「掉階保護」，能緩衝玩家連敗時的挫折感，並提供明確的賽季爬分目標。</li>
+      <li><strong>補分與扣分機制（LP / RR 增減原理）：</strong>
+        <ul>
+          <li><strong>當 MMR &gt; 表面牌位（隱分高於段位）：</strong>系統認為你被低估了，會啟動「補分機制」（例如贏一場 <strong>+28 LP</strong>，輸一場只扣 <strong>-14 LP</strong>），即使勝率只有 50% 也能穩定爬分。</li>
+          <li><strong>當 MMR &lt; 表面牌位（隱分低於段位）：</strong>代表你因掉階保護而「德不配位」，系統會出現「贏少扣多」（贏 +15 LP、輸 -25 LP），直到表面牌位與隱分重新對齊。</li>
+        </ul>
+      </li>
+      <li><strong>《特戰英豪》的段位分層權重（Encounter MMR）：</strong>
+        <ul>
+          <li><strong>低～中段位（鐵牌～鑽石）：</strong>回合淨勝差（如 13:2 大勝）與個人對位擊殺（擊殺高隱分對手）權重高，讓高手快速脫離低端局。</li>
+          <li><strong>高段位（超凡入聖以上）：</strong>大幅降低個人 KDA 權重，幾乎只看勝負與回合差，防止高玩為了刷數據而不顧團隊戰術。</li>
+        </ul>
+      </li>
+      <li><strong>《Dota 2》的信心度視覺化（Rank Confidence）：</strong>Valve 在 2023 年更新中將 Glicko 的 RD 參數公開為「信心度百分比」；若玩家長期未上線導致信心度低於 <strong>30%</strong>，牌位會暫時隱藏並進入重新校準狀態。</li>
+    </ol>
+  </section>
+
+  <section id="page4" class="wiki-card">
+    <h2>Page 4：系統安全與現代爭議（炸魚偵測、SBMM 與 EOMM）</h2>
+    <h3>1. 炸魚偵測機制（Smurf Detection &amp; Anti-Boosting）</h3>
+    <ul>
+      <li><strong>多維度行為指紋：</strong>系統不只看勝負，還會監控<strong>每分鐘傷害（DPM）、爆頭率、APM（每分鐘操作數）、視野控制與地圖熱區</strong>。</li>
+      <li><strong>快速跳段與隔離：</strong>一旦在極少場次內判定為高玩開小號，系統會大幅拉高其不確定度 &sigma; 觸發「跳段」，或將其送入專屬的「炸魚佇列（Smurf Queue）」讓小號互相對決，保護一般新手體驗。</li>
+    </ul>
+
+    <h3>2. SBMM vs. EOMM 的核心衝突</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>比較維度</th>
+            <th>SBMM（基於技術的配對）</th>
+            <th>EOMM（參與度優化配對）</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>核心目標</strong></td>
+            <td>追求競技公平，讓雙方平均 MMR 相等（預測勝率趨近 <strong>50% vs. 50%</strong>）。</td>
+            <td>追求商業留存率，透過圖論模型降低玩家的<strong>流失風險（Churn Risk）</strong>。</td>
+          </tr>
+          <tr>
+            <td><strong>運作邏輯</strong></td>
+            <td>純粹依據玩家實力分佈進行對局配對。</td>
+            <td>根據 EA 與 UCLA 論文（2017），連敗 3 場（LLL）退坑率最高；系統傾向安排特定勝敗節奏（如 WLW）延長遊玩時間。</td>
+          </tr>
+          <tr>
+            <td><strong>玩家體感與爭議</strong></td>
+            <td>在大逃殺或休閒模式中，嚴格的 SBMM 會讓高手每場都像在打決賽，缺乏輕鬆感。</td>
+            <td>容易引發玩家「被系統安排連敗／連勝」的陰謀論質疑（多數大廠官方否認在排位賽使用 EOMM）。</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="page5" class="wiki-card">
+    <h2>Page 5：參考來源與 Ingest 紀錄（10 篇文獻）</h2>
+    <ol>
+      <li><strong>Arpad Elo (1960)</strong> — <em>The Rating of Chessplayers, Past and Present</em>（Elo 評分系統基礎數學模型）</li>
+      <li><strong>Mark Glickman (1995 / 2001)</strong> — <em>Dynamic Paired Comparison Models with Stochastic Variances</em>（Glicko 與 Glicko-2 系統）</li>
+      <li><strong>Herbrich et al., Microsoft Research (2006)</strong> — <em>TrueSkill&trade;: A Bayesian Skill Rating System</em>（多人團隊貝氏推論排名）</li>
+      <li><strong>Minka et al., Microsoft Research (2018)</strong> — <em>TrueSkill 2: An Improved Bayesian Skill Rating System</em>（納入個人局內表現指標）</li>
+      <li><strong>Riot Games Dev Blog</strong> — <em>Matchmaking and Ranked Play</em>（《英雄聯盟》雙軌制牌位與補分機制解析）</li>
+      <li><strong>Riot Games Support FAQ</strong> — <em>How Ranked Rating (RR) is Calculated in Valorant</em>（《特戰英豪》對位隱分與段位權重）</li>
+      <li><strong>Valve Corporation (2023)</strong> — <em>Dota 2: The New Frontiers Update</em>（Glicko 升級版與 Rank Confidence 信心度）</li>
+      <li><strong>Game Security &amp; Matchmaking Engineering Talks</strong> — <em>Behavioral Fingerprinting &amp; Smurf Detection</em>（炸魚偵測與隔離機制）</li>
+      <li><strong>Competitive Game Design Theory</strong> — <em>Skill-Based Matchmaking (SBMM) Principles</em>（基於技術的公平配對原則）</li>
+      <li><strong>Chen et al., EA &amp; UCLA (2017)</strong> — <em>EOMM: An Engagement Optimized Matchmaking Framework</em>（參與度優化配對研究）</li>
+    </ol>
+  </section>
+
+  <footer>
+    LLM Wiki Knowledge Base &bull; 現代遊戲 Elo 與隱分 MMR 機制 &bull; Ready for GitHub Pages
+  </footer>
+</main>
+
+<script>
+  function calcElo() {
+    const ra = parseFloat(document.getElementById('ra').value) || 0;
+    const rb = parseFloat(document.getElementById('rb').value) || 0;
+    const k = parseFloat(document.getElementById('kval').value) || 32;
+    const sa = parseFloat(document.getElementById('outcome').value);
+
+    const ea = 1 / (1 + Math.pow(10, (rb - ra) / 400));
+    const delta = k * (sa - ea);
+    const newRa = ra + delta;
+    const sign = delta >= 0 ? '+' : '';
+
+    document.getElementById('elo-output').innerHTML =
+      `玩家 A 期望勝率：<strong>${(ea * 100).toFixed(1)}%</strong> ｜ ` +
+      `本場積分變動：<strong>${sign}${delta.toFixed(1)} 分</strong> ｜ ` +
+      `賽後新積分：<strong>${newRa.toFixed(1)}</strong>`;
+  }
+  calcElo();
+</script>
+</body>
+</html>
